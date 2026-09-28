@@ -1,0 +1,7 @@
+HoleIO.xcodeproj/
+Payload/
+build/
+*.ipa
+.DS_Store
+Game/*
+!Game/.gitkeep
