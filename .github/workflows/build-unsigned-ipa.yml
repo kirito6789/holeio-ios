@@ -1,0 +1,67 @@
+name: Build unsigned IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout wrapper
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Build Project Singularity
+        run: |
+          git clone https://github.com/frankstop/HoleIO.git upstream
+          git -C upstream checkout 4707e86791f8824198e98c518732740501fbdbc0
+          cd upstream
+          npm ci
+          npm run build -- --base=/
+          cd ..
+          rm -rf Game
+          mkdir Game
+          cp -R upstream/dist/. Game/
+          cp upstream/LICENSE Game/LICENSE.txt
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build app
+        run: |
+          xcodebuild \
+            -project HoleIO.xcodeproj \
+            -scheme HoleIO \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/build" \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Package IPA
+        run: |
+          mkdir Payload
+          cp -R "$RUNNER_TEMP/build/Build/Products/Release-iphoneos/HoleIO.app" Payload/
+          ditto -c -k --sequesterRsrc --keepParent Payload HoleIO-unsigned.ipa
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: HoleIO-unsigned
+          path: HoleIO-unsigned.ipa
+          if-no-files-found: error
